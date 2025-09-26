@@ -36,9 +36,10 @@ logger = logging.getLogger(__name__)
 class VideoRenamerApp:
     """视频重命名应用主类"""
 
-    def __init__(self, target_directory: str, dry_run: bool = False):
+    def __init__(self, target_directory: str, dry_run: bool = False, interactive: bool = False):
         self.target_directory = Path(target_directory)
         self.dry_run = dry_run
+        self.interactive = interactive
 
         # 初始化各个组件
         self.scanner = FileScanner(target_directory)
@@ -130,13 +131,27 @@ class VideoRenamerApp:
         """处理单个视频文件"""
         logger.debug(f"开始处理: {video_path.name}")
 
+        # 交互模式确认
+        if self.interactive:
+            click.echo(f"\n[VIDEO] 处理文件: {video_path.name}")
+            file_size_mb = video_path.stat().st_size / (1024 * 1024)
+            click.echo(f"[SIZE] 文件大小: {file_size_mb:.1f} MB")
+
+            if not click.confirm("继续处理这个文件吗？"):
+                click.echo("[SKIP] 跳过此文件")
+                return None
+
         # 1. 提取视频截图
+        click.echo("[SCREENSHOT] 正在提取视频截图...")
         screenshot_paths = self.video_processor.extract_key_frames(video_path)
         if not screenshot_paths:
             logger.warning(f"无法提取截图: {video_path.name}")
             return None
 
+        click.echo(f"[INFO] 成功提取 {len(screenshot_paths)} 张截图")
+
         # 2. AI分析截图
+        click.echo("[AI] 正在AI分析截图内容...")
         filename = await self.ai_analyzer.analyze_video_screenshots(
             video_path, screenshot_paths
         )
@@ -146,7 +161,22 @@ class VideoRenamerApp:
             filename = self.ai_analyzer.generate_fallback_filename(video_path)
             logger.warning(f"使用备用文件名: {video_path.name} -> {filename}")
 
-        # 4. 清理截图
+        # 4. 交互模式确认重命名
+        if self.interactive:
+            click.echo(f"\n[SUGGEST] AI建议重命名为: {filename}")
+
+            if self.dry_run:
+                click.echo("[DRY-RUN] [试运行] 将执行重命名")
+            else:
+                if not click.confirm("确认使用这个文件名吗？"):
+                    # 允许用户输入自定义文件名
+                    custom_name = click.prompt("请输入自定义文件名（留空使用AI建议）", default="", show_default=False)
+                    if custom_name.strip():
+                        filename = custom_name.strip()
+                        if not filename.endswith('.mp4'):
+                            filename += '.mp4'
+
+        # 5. 清理截图
         self.video_processor.cleanup_temp_files(video_path)
 
         logger.debug(f"处理完成: {video_path.name} -> {filename}")
@@ -177,7 +207,8 @@ class VideoRenamerApp:
 @click.option('--recursive', is_flag=True, default=True, help='递归搜索子目录')
 @click.option('--workers', default=2, help='并发工作线程数')
 @click.option('--verbose', '-v', is_flag=True, help='详细输出')
-def main(target_directory: Path, dry_run: bool, recursive: bool, workers: int, verbose: bool):
+@click.option('--interactive', '-i', is_flag=True, help='交互模式，逐步确认每个文件')
+def main(target_directory: Path, dry_run: bool, recursive: bool, workers: int, verbose: bool, interactive: bool):
     """
     视频文件智能重命名工具
 
@@ -195,16 +226,16 @@ def main(target_directory: Path, dry_run: bool, recursive: bool, workers: int, v
             return
 
     # 运行应用
-    app = VideoRenamerApp(str(target_directory), dry_run=dry_run)
+    app = VideoRenamerApp(str(target_directory), dry_run=dry_run, interactive=interactive)
 
     # 运行异步主函数
     result = asyncio.run(app.run())
 
     # 输出结果
     if result["status"] == "success":
-        click.echo(f"\n✅ 处理完成！")
+        click.echo(f"\n[SUCCESS] 处理完成！")
     else:
-        click.echo(f"\n❌ 处理失败: {result['message']}")
+        click.echo(f"\n[FAILED] 处理失败: {result['message']}")
         sys.exit(1)
 
 if __name__ == "__main__":

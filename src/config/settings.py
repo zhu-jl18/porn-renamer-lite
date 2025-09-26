@@ -4,7 +4,8 @@
 """
 import os
 from typing import Optional
-from pydantic import BaseSettings, Field
+from pydantic_settings import BaseSettings
+from pydantic import Field
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -13,10 +14,10 @@ load_dotenv()
 class Settings(BaseSettings):
     """应用配置"""
 
-    # API配置
+    # API配置 - 硬编码本地API地址
     api_url: str = Field(
-        default="http://localhost:3001/proxy/free",
-        description="AI API服务地址"
+        default="http://localhost:3001/proxy/free/",
+        description="AI API服务地址 - 本机Docker部署"
     )
 
     # 重试配置
