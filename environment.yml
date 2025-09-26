@@ -1,0 +1,21 @@
+name: video_renamer
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - opencv
+  - pillow
+  - requests
+  - pydantic
+  - python-dotenv
+  - pytest
+  - pytest-asyncio
+  - pip:
+    - httpx
+    - moviepy
+    - tqdm
+    - click
+variables:
+  PYTHONPATH: $PYTHONPATH:src
